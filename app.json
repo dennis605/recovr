@@ -38,7 +38,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-health-kit"
     ],
     "experiments": {
       "typedRoutes": true,

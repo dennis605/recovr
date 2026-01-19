@@ -1,98 +1,106 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { ThemedText } from '@/components/themed-text';
+import { useRecoveryState } from '@/core/hooks/useRecoveryState';
+import { StyleSheet, Button, ActivityIndicator, Platform } from 'react-native';
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const {
+    lastRecoveryState,
+    isLoading,
+    error,
+    isHealthKitAvailable,
+    processNewData,
+  } = useRecoveryState();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
+  const getStatusColor = (status: 'green' | 'yellow' | 'red') => {
+    const colors = {
+      green: '#28a745',
+      yellow: '#ffc107',
+      red: '#dc3545',
+    };
+    return colors[status] || '#ccc';
+  };
+  
+  const recoveryHours = Math.round(lastRecoveryState.recoveryHoursRemaining);
+
+  const renderContent = () => {
+    if (isLoading) {
+      return <ActivityIndicator size="large" />;
+    }
+
+    if (error) {
+      return <ThemedText type="default">Error: {error}</ThemedText>;
+    }
+
+    if (!isHealthKitAvailable) {
+      return <ThemedText type="default">HealthKit is not available on this device.</ThemedText>;
+    }
+
+    return (
+      <>
+        <ThemedView
+          style={[
+            styles.statusCircle,
+            { backgroundColor: getStatusColor(lastRecoveryState.status) },
+          ]}
+        >
+          {recoveryHours > 0 ? (
+            <ThemedText style={styles.statusText}>{recoveryHours}h</ThemedText>
+          ) : (
+            <ThemedText style={styles.statusText}>✓</ThemedText>
+          )}
+        </ThemedView>
+        <ThemedText type="subtitle" style={styles.subtitle}>
+          Recovery Time
         </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        {lastRecoveryState.readyForHardTrainingAt ? (
+            <ThemedText style={styles.dateText}>
+                Ready for hard training at: {' '}
+                {new Date(lastRecoveryState.readyForHardTrainingAt).toLocaleTimeString()}
+            </ThemedText>
+        ) : (
+            <ThemedText style={styles.dateText}>Ready for anything!</ThemedText>
+        )}
+        <Button title="Refresh Data" onPress={processNewData} />
+      </>
+    );
+  };
+
+  return (
+    <ThemedView style={styles.container}>
+      <ThemedText type="title">Your Recovery</ThemedText>
+      {renderContent()}
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    padding: 20,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  statusCircle: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 20,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  statusText: {
+    fontSize: 64,
+    fontWeight: 'bold',
+    color: '#fff',
   },
+  subtitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  dateText: {
+    fontSize: 16,
+    marginBottom: 20,
+  }
 });

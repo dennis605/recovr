@@ -7,4 +7,13 @@ module.exports = defineConfig([
   {
     ignores: ['dist/*'],
   },
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    settings: {
+      'import/resolver': {
+        typescript: {}, // Let it use the default tsconfig.json
+        node: true,
+      },
+    },
+  },
 ]);
