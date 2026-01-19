@@ -120,5 +120,17 @@ export const fetchSleep = (options: HealthInputOptions): Promise<HealthValue[]> 
     });
 };
 
-// We will also need functions to fetch HR samples within a workout.
-// This is more complex and will be added later.
+/**
+ * Fetches Heart Rate samples within a specified date range.
+ * @param options - The date range for the query.
+ */
+export const fetchHeartRateSamples = (options: HealthInputOptions): Promise<HealthValue[]> => {
+  return new Promise((resolve, reject) => {
+    AppleHealthKit.getHeartRateSamples(options, (err: string, results: HealthValue[]) => {
+      if (err) {
+        return reject(new Error(`Error fetching heart rate samples: ${err}`));
+      }
+      resolve(results);
+    });
+  });
+};

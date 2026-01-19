@@ -55,6 +55,7 @@ export interface RecoveryState {
     sleepModifier?: number;
     hrvModifier?: number;
     rhrModifier?: number;
+    learningModifier?: number;
   };
 }
 
