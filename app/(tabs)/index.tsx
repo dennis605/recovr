@@ -19,18 +19,18 @@ export default function HomeScreen() {
     const configs = {
       green: {
         color: '#20C997',
-        label: 'Ready for intensity',
-        description: 'Your body is primed for hard training.',
+        label: 'Bereit für Intensität',
+        description: 'Dein Körper ist bereit für hartes Training.',
       },
       yellow: {
         color: '#F4B740',
-        label: 'Train moderately',
-        description: 'Keep it steady and avoid max efforts.',
+        label: 'Moderat trainieren',
+        description: 'Halte das Tempo konstant und vermeide Maximalbelastung.',
       },
       red: {
         color: '#FF6B6B',
-        label: 'Focus on recovery',
-        description: 'Your system needs more rest before intensity.',
+        label: 'Erholung priorisieren',
+        description: 'Dein Körper braucht mehr Ruhe vor intensiven Einheiten.',
       },
     };
     return configs[lastRecoveryState.status] ?? configs.green;
@@ -38,10 +38,15 @@ export default function HomeScreen() {
 
   const recoveryHours = Math.max(0, Math.round(lastRecoveryState.recoveryHoursRemaining));
   const readyTimeLabel = lastRecoveryState.readyForHardTrainingAt
-    ? new Date(lastRecoveryState.readyForHardTrainingAt).toLocaleString()
-    : 'Ready any time';
+    ? new Date(lastRecoveryState.readyForHardTrainingAt).toLocaleString('de-DE')
+    : 'Jederzeit bereit';
   const debtScore = Math.max(0, Math.round(lastRecoveryState.debtScore));
   const breakdown = lastRecoveryState.explanationBreakdown;
+  const statusLabelMap = {
+    green: 'GRÜN',
+    yellow: 'GELB',
+    red: 'ROT',
+  };
 
   const formatModifier = (value?: number) => {
     if (value === undefined) return '—';
@@ -58,9 +63,12 @@ export default function HomeScreen() {
       return (
         <ThemedView style={styles.noticeCard} lightColor="#FFF5F5" darkColor="#2A1A1A">
           <ThemedText type="defaultSemiBold" style={styles.noticeTitle}>
-            Something went wrong
+            Etwas ist schiefgelaufen
           </ThemedText>
           <ThemedText type="default">{error}</ThemedText>
+          <ThemedView style={styles.retryRow} lightColor="transparent" darkColor="transparent">
+            <Button title="Erneut versuchen" onPress={processNewData} />
+          </ThemedView>
         </ThemedView>
       );
     }
@@ -70,36 +78,36 @@ export default function HomeScreen() {
         <>
           <ThemedView style={styles.noticeCard} lightColor="#FFF8E5" darkColor="#2A2210">
             <ThemedText type="defaultSemiBold" style={styles.noticeTitle}>
-              Health data unavailable
+              Gesundheitsdaten nicht verfügbar
             </ThemedText>
             <ThemedText type="default">
-              HealthKit is not available on this device. Connect Apple Health to unlock recovery.
+              HealthKit ist auf diesem Gerät nicht verfügbar. Verbinde Apple Health, um die Erholung zu sehen.
             </ThemedText>
           </ThemedView>
           <ThemedView style={styles.debugCard} lightColor="#FFFFFF" darkColor="#16191F">
             <ThemedText type="defaultSemiBold" style={styles.noticeTitle}>
-              HealthKit debug
+              HealthKit-Debug
             </ThemedText>
             <ThemedView lightColor="transparent" darkColor="transparent" style={styles.debugRow}>
-              <ThemedText>Module available</ThemedText>
+              <ThemedText>Modul verfügbar</ThemedText>
               <ThemedText type="defaultSemiBold">
                 {healthDebug?.moduleAvailable ? 'yes' : 'no'}
               </ThemedText>
             </ThemedView>
             <ThemedView lightColor="transparent" darkColor="transparent" style={styles.debugRow}>
-              <ThemedText>HealthKit available</ThemedText>
+              <ThemedText>HealthKit verfügbar</ThemedText>
               <ThemedText type="defaultSemiBold">
                 {healthDebug?.isAvailable === undefined
-                  ? 'unknown'
+                  ? 'unbekannt'
                   : healthDebug.isAvailable
-                    ? 'yes'
-                    : 'no'}
+                    ? 'ja'
+                    : 'nein'}
               </ThemedText>
             </ThemedView>
             {healthDebug?.error ? (
               <ThemedText type="default">{healthDebug.error}</ThemedText>
             ) : null}
-            <Button title="Check HealthKit" onPress={checkHealthKitStatus} />
+            <Button title="HealthKit prüfen" onPress={checkHealthKitStatus} />
           </ThemedView>
         </>
       );
@@ -121,7 +129,7 @@ export default function HomeScreen() {
             <ThemedText type="subtitle">{statusConfig.label}</ThemedText>
             <ThemedText style={styles.statusDescription}>{statusConfig.description}</ThemedText>
             <ThemedView style={styles.readyRow} lightColor="transparent" darkColor="transparent">
-              <ThemedText type="defaultSemiBold">Ready for hard training</ThemedText>
+              <ThemedText type="defaultSemiBold">Bereit für hartes Training</ThemedText>
               <ThemedText style={styles.readyTime}>{readyTimeLabel}</ThemedText>
             </ThemedView>
           </ThemedView>
@@ -129,44 +137,44 @@ export default function HomeScreen() {
 
         <ThemedView style={styles.metricsGrid} lightColor="transparent" darkColor="transparent">
           <ThemedView style={styles.metricCard} lightColor="#F4F6FF" darkColor="#1E2430">
-            <ThemedText type="defaultSemiBold">Recovery debt</ThemedText>
+            <ThemedText type="defaultSemiBold">Erholungsdefizit</ThemedText>
             <ThemedText style={styles.metricValue}>{debtScore}</ThemedText>
-            <ThemedText style={styles.metricCaption}>Load points remaining</ThemedText>
+            <ThemedText style={styles.metricCaption}>Belastungspunkte verbleibend</ThemedText>
           </ThemedView>
           <ThemedView style={styles.metricCard} lightColor="#F3FFF9" darkColor="#15261E">
             <ThemedText type="defaultSemiBold">Status</ThemedText>
             <ThemedText style={[styles.metricValue, { color: statusConfig.color }]}>
-              {lastRecoveryState.status.toUpperCase()}
+              {statusLabelMap[lastRecoveryState.status]}
             </ThemedText>
-            <ThemedText style={styles.metricCaption}>Training readiness</ThemedText>
+            <ThemedText style={styles.metricCaption}>Trainingsbereitschaft</ThemedText>
           </ThemedView>
         </ThemedView>
 
         <ThemedView style={styles.breakdownCard} lightColor="#FFFFFF" darkColor="#16191F">
           <ThemedView style={styles.breakdownHeader} lightColor="transparent" darkColor="transparent">
-            <ThemedText type="subtitle">Why this recovery?</ThemedText>
-            <ThemedText style={styles.breakdownCaption}>Latest inputs applied</ThemedText>
+            <ThemedText type="subtitle">Warum diese Erholung?</ThemedText>
+            <ThemedText style={styles.breakdownCaption}>Letzte Eingaben angewendet</ThemedText>
           </ThemedView>
           <ThemedView style={styles.breakdownRow} lightColor="transparent" darkColor="transparent">
-            <ThemedText>Last workout load</ThemedText>
+            <ThemedText>Letzte Trainingslast</ThemedText>
             <ThemedText type="defaultSemiBold">
               {breakdown?.lastWorkoutLoad ? Math.round(breakdown.lastWorkoutLoad) : '—'}
             </ThemedText>
           </ThemedView>
           <ThemedView style={styles.breakdownRow} lightColor="transparent" darkColor="transparent">
-            <ThemedText>Sleep impact</ThemedText>
+            <ThemedText>Schlaf-Einfluss</ThemedText>
             <ThemedText type="defaultSemiBold">{formatModifier(breakdown?.sleepModifier)}</ThemedText>
           </ThemedView>
           <ThemedView style={styles.breakdownRow} lightColor="transparent" darkColor="transparent">
-            <ThemedText>HRV trend</ThemedText>
+            <ThemedText>HRV-Trend</ThemedText>
             <ThemedText type="defaultSemiBold">{formatModifier(breakdown?.hrvModifier)}</ThemedText>
           </ThemedView>
           <ThemedView style={styles.breakdownRow} lightColor="transparent" darkColor="transparent">
-            <ThemedText>Resting HR</ThemedText>
+            <ThemedText>Ruhepuls</ThemedText>
             <ThemedText type="defaultSemiBold">{formatModifier(breakdown?.rhrModifier)}</ThemedText>
           </ThemedView>
           <ThemedView style={styles.breakdownRow} lightColor="transparent" darkColor="transparent">
-            <ThemedText>Learning phase</ThemedText>
+            <ThemedText>Lernphase</ThemedText>
             <ThemedText type="defaultSemiBold">
               {formatModifier(breakdown?.learningModifier)}
             </ThemedText>
@@ -174,7 +182,7 @@ export default function HomeScreen() {
         </ThemedView>
 
         <ThemedView style={styles.actionRow} lightColor="transparent" darkColor="transparent">
-          <Button title="Refresh data" onPress={processNewData} />
+          <Button title="Daten aktualisieren" onPress={processNewData} />
         </ThemedView>
       </>
     );
@@ -183,9 +191,9 @@ export default function HomeScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <ThemedView style={styles.header} lightColor="transparent" darkColor="transparent">
-        <ThemedText type="title">Recovery</ThemedText>
+        <ThemedText type="title">Erholung</ThemedText>
         <ThemedText style={styles.headerSubtitle}>
-          Stay in tune with your training readiness.
+          Behalte deine Trainingsbereitschaft im Blick.
         </ThemedText>
       </ThemedView>
       {renderContent()}
@@ -281,6 +289,9 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     marginTop: 4,
+  },
+  retryRow: {
+    marginTop: 8,
   },
   noticeCard: {
     padding: 20,

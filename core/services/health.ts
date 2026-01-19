@@ -42,11 +42,11 @@ export const isHealthKitModuleAvailable = () => {
 
 const ensureNativeModuleAvailable = () => {
   if (Platform.OS !== 'ios') {
-    throw new Error('HealthKit is only available on iOS.');
+    throw new Error('HealthKit ist nur auf iOS verfügbar.');
   }
   if (!healthKitModule) {
     throw new Error(
-      'ExpoHealthKit native module is unavailable. Add the expo-health-kit plugin and use a development build (Expo Go does not support HealthKit).'
+      'Das ExpoHealthKit-Modul ist nicht verfügbar. Füge das expo-health-kit Plugin hinzu und nutze einen Development Build (Expo Go unterstützt HealthKit nicht).'
     );
   }
 };
@@ -90,7 +90,7 @@ export const initializeHealthKit = (): Promise<boolean> => {
       ensureNativeModuleAvailable();
       const isAvailable = await healthKitModule.isHealthKitAvailable();
       if (!isAvailable) {
-        return reject(new Error('HealthKit is not available on this device.'));
+        return reject(new Error('HealthKit ist auf diesem Gerät nicht verfügbar.'));
       }
       const authResult = await healthKitModule.requestAuthorization(selectedDataTypes);
       const authSuccess =
@@ -98,12 +98,12 @@ export const initializeHealthKit = (): Promise<boolean> => {
           ? Boolean(authResult.success)
           : Boolean(authResult);
       if (!authSuccess) {
-        return reject(new Error('Failed to initialize HealthKit permissions.'));
+        return reject(new Error('HealthKit-Berechtigungen konnten nicht initialisiert werden.'));
       }
       resolve(true);
     } catch (error) {
       console.error('Error initializing HealthKit:', error);
-      reject(new Error('Failed to initialize HealthKit.'));
+      reject(new Error('HealthKit konnte nicht initialisiert werden.'));
     }
   });
 };
@@ -141,7 +141,8 @@ export const fetchWorkouts = (options: HealthInputOptions): Promise<HealthValue[
       const results = await healthKitModule.queryHealthData(
         HealthKitDataType.WORKOUT,
         startDate.toISOString(),
-        endDate.toISOString()
+        endDate.toISOString(),
+        { ascending: true, limit: 200 }
       );
       resolve(results.map((sample: any, index: number) => normalizeWorkoutSample(sample, index)));
     } catch (error) {
@@ -165,7 +166,7 @@ export const fetchRestingHeartRate = (options: HealthInputOptions): Promise<Heal
         HealthKitDataType.RESTING_HEART_RATE,
         startDate.toISOString(),
         endDate.toISOString(),
-        { ascending: true }
+        { ascending: true, limit: 500 }
       );
       resolve(results.map((sample: any) => normalizeSample(sample)));
     } catch (error) {
@@ -188,7 +189,7 @@ export const fetchHrv = (options: HealthInputOptions): Promise<HealthValue[]> =>
         HealthKitDataType.HEART_RATE_VARIABILITY_SDNN,
         startDate.toISOString(),
         endDate.toISOString(),
-        { ascending: true }
+        { ascending: true, limit: 200 }
       );
       resolve(results.map((sample: any) => normalizeSample(sample)));
     } catch (error) {
@@ -211,7 +212,7 @@ export const fetchSleep = (options: HealthInputOptions): Promise<HealthValue[]> 
         HealthKitDataType.SLEEP_ANALYSIS,
         startDate.toISOString(),
         endDate.toISOString(),
-        { ascending: true }
+        { ascending: true, limit: 500 }
       );
       resolve(results.map((sample: any) => normalizeSample(sample)));
     } catch (error) {

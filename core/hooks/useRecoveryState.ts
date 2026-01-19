@@ -77,7 +77,7 @@ const initialAppData: AppData = {
 
 export const useRecoveryState = () => {
   const [appData, setAppData] = useState<AppData>(initialAppData);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isHealthKitAvailable, setIsHealthKitAvailable] = useState(false);
   const [healthDebug, setHealthDebug] =
@@ -87,18 +87,10 @@ export const useRecoveryState = () => {
   useEffect(() => {
     const init = async () => {
       try {
-        if (!HealthService.isHealthKitModuleAvailable()) {
-          setIsHealthKitAvailable(false);
-          setIsLoading(false);
-          return;
-        }
-        const didInit = await HealthService.initializeHealthKit();
-        setIsHealthKitAvailable(didInit);
-        // Initial data fetch can be triggered here
-        // For now, we just stop loading
+        setIsHealthKitAvailable(HealthService.isHealthKitModuleAvailable());
         setIsLoading(false);
       } catch (e: any) {
-        setError(e.message || 'An unknown error occurred.');
+        setError(e.message || 'Ein unbekannter Fehler ist aufgetreten.');
         setIsLoading(false);
       }
     };
@@ -111,23 +103,87 @@ export const useRecoveryState = () => {
     setHealthDebug(status);
   };
   
+  const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, label: string) => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`${label} (${Math.round(timeoutMs / 1000)}s)`));
+      }, timeoutMs);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }) as Promise<T>;
+  };
+
   // Function to process new data and update the state
-  const processNewData = async () => {
-    if (!isHealthKitAvailable) return;
+  const processNewData = async (options?: { force?: boolean }) => {
+    if (!options?.force && !isHealthKitAvailable) return;
     
     setIsLoading(true);
     try {
-        // 1. Fetch new raw data from HealthKit (e.g., last 30 days)
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const options = { startDate: thirtyDaysAgo.toISOString() };
+        console.log('[HealthKit] refresh:start');
+        setError(null);
+        if (!HealthService.isHealthKitModuleAvailable()) {
+          setIsHealthKitAvailable(false);
+          throw new Error('HealthKit ist auf diesem Gerät nicht verfügbar.');
+        }
+        console.log('[HealthKit] init:start');
+        const didInit = await withTimeout(
+          HealthService.initializeHealthKit(),
+          15000,
+          'HealthKit-Initialisierung zu lange'
+        );
+        console.log('[HealthKit] init:done', { didInit });
+        setIsHealthKitAvailable(didInit);
+        if (!didInit) {
+          throw new Error('HealthKit konnte nicht initialisiert werden.');
+        }
 
-        const [workouts, rhr, hrv, sleep] = await Promise.all([
-            HealthService.fetchWorkouts(options),
-            HealthService.fetchRestingHeartRate(options),
-            HealthService.fetchHrv(options),
-            HealthService.fetchSleep(options)
-        ]);
+        const errors: string[] = [];
+        const safeFetch = async <T,>(label: string, fetcher: () => Promise<T>) => {
+          try {
+            return await withTimeout(fetcher(), 10000, `${label} zu lange`);
+          } catch (fetchError: any) {
+            errors.push(fetchError?.message ?? label);
+            return [] as unknown as T;
+          }
+        };
+
+        // 1. Fetch baseline metrics (last 7 days, capped)
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const baseOptions = { startDate: sevenDaysAgo.toISOString() };
+        const threeDaysAgo = new Date();
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+        const sleepOptions = { startDate: threeDaysAgo.toISOString() };
+
+        console.log('[HealthKit] fetch:rhr:start', baseOptions);
+        const rhr = await safeFetch('Ruhepuls-Abfrage', () =>
+          HealthService.fetchRestingHeartRate(baseOptions)
+        );
+        console.log('[HealthKit] fetch:rhr:done', { count: rhr.length });
+
+        console.log('[HealthKit] fetch:sleep:start', sleepOptions);
+        const sleep = await safeFetch('Schlaf-Abfrage', () =>
+          HealthService.fetchSleep(sleepOptions)
+        );
+        console.log('[HealthKit] fetch:sleep:done', { count: sleep.length });
+
+        console.log('[HealthKit] fetch:hrv:start', baseOptions);
+        const hrv = await safeFetch('HRV-Abfrage', () =>
+          HealthService.fetchHrv(baseOptions)
+        );
+        console.log('[HealthKit] fetch:hrv:done', { count: hrv.length });
+
+        // 2. Fetch workouts (last 3 days) to reduce load
+        const workoutOptions = { startDate: threeDaysAgo.toISOString() };
+        console.log('[HealthKit] fetch:workouts:start', workoutOptions);
+        const workouts = await safeFetch('Workouts-Abfrage', () =>
+          HealthService.fetchWorkouts(workoutOptions)
+        );
+        console.log('[HealthKit] fetch:workouts:done', { count: workouts.length });
 
         const newDailyMetrics: DailyMetrics[] = aggregateDailyMetrics(
           rhr,
@@ -141,18 +197,26 @@ export const useRecoveryState = () => {
         // 2. Transform raw data into our data models (WorkoutSummary, DailyMetrics)
         // This is a placeholder for a more complex transformation logic.
         // For example, we'd need to get HR samples for each workout to calculate zones.
+        const workoutSlice = workouts.slice(0, 20);
+        console.log('[HealthKit] process:workouts', { count: workoutSlice.length });
         const newWorkoutSummaries: WorkoutSummary[] = await Promise.all(
-          workouts.map(async w => {
+          workoutSlice.map(async (w, index) => {
+            console.log('[HealthKit] workout:start', { index, start: w.startDate, end: w.endDate });
             const durationInSeconds =
               (new Date(w.endDate).getTime() - new Date(w.startDate).getTime()) / 1000;
             const durationMinutes = durationInSeconds / 60;
             const workoutDateKey = formatDateKey(new Date(w.startDate));
             const dailyMetric = dailyMetricsByDate.get(workoutDateKey);
 
-            const heartRateSamples = await HealthService.fetchHeartRateSamples({
-              startDate: w.startDate,
-              endDate: w.endDate,
-            });
+            const shouldFetchHeartRate = index < 3;
+            const heartRateSamples = shouldFetchHeartRate
+              ? await safeFetch('Herzfrequenz-Abfrage', () =>
+                  HealthService.fetchHeartRateSamples({
+                    startDate: w.startDate,
+                    endDate: w.endDate,
+                  })
+                )
+              : [];
 
             const normalizedHeartRateSamples: HeartRateSample[] = heartRateSamples
               .map(sample => ({
@@ -172,6 +236,12 @@ export const useRecoveryState = () => {
               restingHeartRate: dailyMetric?.restingHeartRate,
             });
 
+            console.log('[HealthKit] workout:done', {
+              index,
+              hrFetched: shouldFetchHeartRate,
+              hrSamples: normalizedHeartRateSamples.length,
+              loadScore: loadResult.loadScore,
+            });
             return {
               id: w.uuid,
               type: w.activityName,
@@ -202,9 +272,21 @@ export const useRecoveryState = () => {
             lastRecoveryState: newState,
         }));
 
+        console.log('[HealthKit] refresh:done', {
+          workouts: workouts.length,
+          rhr: rhr.length,
+          hrv: hrv.length,
+          sleep: sleep.length,
+          errors,
+        });
+        if (errors.length > 0 && workouts.length === 0 && rhr.length === 0 && hrv.length === 0 && sleep.length === 0) {
+          setError(`HealthKit liefert keine Daten. ${errors.join(' · ')}`);
+        }
     } catch (e: any) {
-        setError(e.message || 'Failed to process new data.');
+        console.log('[HealthKit] refresh:error', e);
+        setError(e.message || 'Daten konnten nicht verarbeitet werden.');
     } finally {
+        console.log('[HealthKit] refresh:end');
         setIsLoading(false);
     }
   };
