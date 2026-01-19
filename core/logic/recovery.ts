@@ -6,36 +6,42 @@ import { DailyMetrics, RecoveryState, WorkoutSummary } from '../models/types';
 
 const HR_ZONE_WEIGHTS = {
   z1: 1.0,
-  z2: 1.5,
-  z3: 2.5,
-  z4: 4.0,
-  z5: 7.0,
+  z2: 2.0,
+  z3: 3.0,
+  z4: 5.0,
+  z5: 8.0,
 };
 
-const BASE_RECOVERY_RATE_PER_HOUR = 10.0; // Load points recovered per hour under ideal conditions
+const BASE_RECOVERY_RATE_PER_HOUR = 6.0; // Load points recovered per hour under ideal conditions
 
 const MODIFIERS = {
   SLEEP: {
-    GOOD_THRESHOLD_RATIO: 0.9,
+    GOOD_THRESHOLD_RATIO: 1.0,
+    POOR_THRESHOLD_RATIO: 0.8,
     GOOD_MODIFIER: 1.15,
     POOR_MODIFIER: 0.85,
   },
   HRV: {
-    HIGH_THRESHOLD_RATIO: 1.05,
-    LOW_THRESHOLD_RATIO: 0.95,
+    HIGH_THRESHOLD_RATIO: 1.1,
+    LOW_THRESHOLD_RATIO: 0.9,
     HIGH_MODIFIER: 1.1,
     LOW_MODIFIER: 0.9,
   },
   RHR: {
     HIGH_THRESHOLD_RATIO: 1.05,
-    HIGH_MODIFIER: 0.95, // High RHR is bad for recovery
+    LOW_THRESHOLD_RATIO: 0.95,
+    HIGH_MODIFIER: 0.9, // High RHR is bad for recovery
+    LOW_MODIFIER: 1.05,
     NORMAL_MODIFIER: 1.0,
   },
 };
 
+const LEARNING_PHASE_DAYS = 7;
+const LEARNING_PHASE_RECOVERY_MODIFIER = 1.15;
+
 const DEBT_THRESHOLDS = {
-  RED: 80,
-  YELLOW: 20,
+  RED: 25,
+  YELLOW: 10,
 };
 
 // --- Core Functions ---
@@ -90,11 +96,14 @@ export function calculateNewRecoveryState(
   let sleepModifier = 1.0;
   let hrvModifier = 1.0;
   let rhrModifier = 1.0;
+  let learningModifier = 1.0;
   
   if (latestMetrics?.sleepInMinutes && sleepBaseline > 0) {
-    sleepModifier = latestMetrics.sleepInMinutes >= sleepBaseline * MODIFIERS.SLEEP.GOOD_THRESHOLD_RATIO 
-      ? MODIFIERS.SLEEP.GOOD_MODIFIER 
-      : MODIFIERS.SLEEP.POOR_MODIFIER;
+    if (latestMetrics.sleepInMinutes >= sleepBaseline * MODIFIERS.SLEEP.GOOD_THRESHOLD_RATIO) {
+      sleepModifier = MODIFIERS.SLEEP.GOOD_MODIFIER;
+    } else if (latestMetrics.sleepInMinutes < sleepBaseline * MODIFIERS.SLEEP.POOR_THRESHOLD_RATIO) {
+      sleepModifier = MODIFIERS.SLEEP.POOR_MODIFIER;
+    }
   }
   if (latestMetrics?.hrvSdn && hrvBaseline > 0) {
     if (latestMetrics.hrvSdn > hrvBaseline * MODIFIERS.HRV.HIGH_THRESHOLD_RATIO) {
@@ -103,14 +112,20 @@ export function calculateNewRecoveryState(
       hrvModifier = MODIFIERS.HRV.LOW_MODIFIER;
     }
   }
-   if (latestMetrics?.restingHeartRate && rhrBaseline > 0) {
+  if (latestMetrics?.restingHeartRate && rhrBaseline > 0) {
     if (latestMetrics.restingHeartRate > rhrBaseline * MODIFIERS.RHR.HIGH_THRESHOLD_RATIO) {
       rhrModifier = MODIFIERS.RHR.HIGH_MODIFIER;
+    } else if (latestMetrics.restingHeartRate < rhrBaseline * MODIFIERS.RHR.LOW_THRESHOLD_RATIO) {
+      rhrModifier = MODIFIERS.RHR.LOW_MODIFIER;
     }
   }
 
   // 4. Calculate recovered debt
-  const effectiveRecoveryRate = BASE_RECOVERY_RATE_PER_HOUR * sleepModifier * hrvModifier * rhrModifier;
+  if (dailyMetrics.length > 0 && dailyMetrics.length < LEARNING_PHASE_DAYS) {
+    learningModifier = LEARNING_PHASE_RECOVERY_MODIFIER;
+  }
+
+  const effectiveRecoveryRate = BASE_RECOVERY_RATE_PER_HOUR * sleepModifier * hrvModifier * rhrModifier * learningModifier;
   const recoveredDebt = hoursPassed * effectiveRecoveryRate;
   let currentDebt = Math.max(0, previousState.debtScore - recoveredDebt);
 
@@ -122,12 +137,13 @@ export function calculateNewRecoveryState(
   }
 
   // 6. Calculate new output values
-  const recoveryHoursRemaining = currentDebt / effectiveRecoveryRate;
-  
+  const hardTrainingDebt = Math.max(0, currentDebt - DEBT_THRESHOLDS.YELLOW);
+  const recoveryHoursRemaining = hardTrainingDebt / effectiveRecoveryRate;
+
   let readyForHardTrainingAt: string | undefined;
   if (recoveryHoursRemaining > 0) {
-      const readyDate = new Date(now.getTime() + recoveryHoursRemaining * 60 * 60 * 1000);
-      readyForHardTrainingAt = readyDate.toISOString();
+    const readyDate = new Date(now.getTime() + recoveryHoursRemaining * 60 * 60 * 1000);
+    readyForHardTrainingAt = readyDate.toISOString();
   }
 
   // 7. Determine status
@@ -151,6 +167,7 @@ export function calculateNewRecoveryState(
       sleepModifier,
       hrvModifier,
       rhrModifier,
+      learningModifier,
     },
   };
 }
