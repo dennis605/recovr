@@ -80,13 +80,20 @@ export const useRecoveryState = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isHealthKitAvailable, setIsHealthKitAvailable] = useState(false);
+  const [healthDebug, setHealthDebug] =
+    useState<HealthService.HealthKitDebugStatus | null>(null);
 
   // Effect to initialize HealthKit on mount
   useEffect(() => {
     const init = async () => {
       try {
-        await HealthService.initializeHealthKit();
-        setIsHealthKitAvailable(true);
+        if (!HealthService.isHealthKitModuleAvailable()) {
+          setIsHealthKitAvailable(false);
+          setIsLoading(false);
+          return;
+        }
+        const didInit = await HealthService.initializeHealthKit();
+        setIsHealthKitAvailable(didInit);
         // Initial data fetch can be triggered here
         // For now, we just stop loading
         setIsLoading(false);
@@ -98,6 +105,11 @@ export const useRecoveryState = () => {
 
     init();
   }, []);
+
+  const checkHealthKitStatus = async () => {
+    const status = await HealthService.getHealthKitStatus();
+    setHealthDebug(status);
+  };
   
   // Function to process new data and update the state
   const processNewData = async () => {
@@ -202,6 +214,8 @@ export const useRecoveryState = () => {
     isLoading,
     error,
     isHealthKitAvailable,
+    healthDebug,
+    checkHealthKitStatus,
     processNewData,
   };
 };

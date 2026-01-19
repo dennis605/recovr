@@ -1,6 +1,6 @@
 // core/services/health.ts
-import { ExpoHealthKit } from 'expo-health-kit/build/runtime';
 import { HealthKitDataType } from 'expo-health-kit/build/types';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 import { Platform } from 'react-native';
 
 export type HealthInputOptions = {
@@ -19,8 +19,14 @@ export type HealthValue = {
   activityName?: string;
 };
 
-const healthKit = new ExpoHealthKit();
-let isConfigured = false;
+export type HealthKitDebugStatus = {
+  moduleAvailable: boolean;
+  isAvailable?: boolean;
+  authorizationStatus?: Record<string, string>;
+  error?: string;
+};
+
+const healthKitModule = requireOptionalNativeModule<any>('ExpoHealthKit');
 
 const selectedDataTypes: HealthKitDataType[] = [
   HealthKitDataType.WORKOUT,
@@ -30,13 +36,19 @@ const selectedDataTypes: HealthKitDataType[] = [
   HealthKitDataType.SLEEP_ANALYSIS,
 ];
 
-const ensureConfigured = async () => {
-  if (isConfigured) return;
-  await healthKit.configure({
-    selectedDataTypes,
-    exportFormat: 'json',
-  });
-  isConfigured = true;
+export const isHealthKitModuleAvailable = () => {
+  return Platform.OS === 'ios' && !!healthKitModule;
+};
+
+const ensureNativeModuleAvailable = () => {
+  if (Platform.OS !== 'ios') {
+    throw new Error('HealthKit is only available on iOS.');
+  }
+  if (!healthKitModule) {
+    throw new Error(
+      'ExpoHealthKit native module is unavailable. Add the expo-health-kit plugin and use a development build (Expo Go does not support HealthKit).'
+    );
+  }
 };
 
 const toDateRange = (options: HealthInputOptions) => {
@@ -71,17 +83,21 @@ const normalizeWorkoutSample = (sample: any, index: number): HealthValue => ({
  */
 export const initializeHealthKit = (): Promise<boolean> => {
   return new Promise(async (resolve, reject) => {
-    if (Platform.OS !== 'ios') {
-      return reject(new Error('HealthKit is only available on iOS.'));
+    if (!isHealthKitModuleAvailable()) {
+      return resolve(false);
     }
     try {
-      await ensureConfigured();
-      const isAvailable = await healthKit.isHealthKitAvailable();
+      ensureNativeModuleAvailable();
+      const isAvailable = await healthKitModule.isHealthKitAvailable();
       if (!isAvailable) {
         return reject(new Error('HealthKit is not available on this device.'));
       }
-      const authResult = await healthKit.requestAuthorization(selectedDataTypes);
-      if (!authResult.success) {
+      const authResult = await healthKitModule.requestAuthorization(selectedDataTypes);
+      const authSuccess =
+        typeof authResult === 'object' && authResult !== null && 'success' in authResult
+          ? Boolean(authResult.success)
+          : Boolean(authResult);
+      if (!authSuccess) {
         return reject(new Error('Failed to initialize HealthKit permissions.'));
       }
       resolve(true);
@@ -92,6 +108,26 @@ export const initializeHealthKit = (): Promise<boolean> => {
   });
 };
 
+export const getHealthKitStatus = async (): Promise<HealthKitDebugStatus> => {
+  if (!isHealthKitModuleAvailable()) {
+    return { moduleAvailable: false };
+  }
+  try {
+    ensureNativeModuleAvailable();
+    const isAvailable = await healthKitModule.isHealthKitAvailable();
+    if (!isAvailable) {
+      return { moduleAvailable: true, isAvailable: false };
+    }
+    const authorizationStatus = await healthKitModule.getAuthorizationStatus(selectedDataTypes);
+    return { moduleAvailable: true, isAvailable, authorizationStatus };
+  } catch (error: any) {
+    return {
+      moduleAvailable: true,
+      error: error?.message ?? String(error),
+    };
+  }
+};
+
 /**
  * Fetches workouts within a specified date range.
  * Placeholder function. Implementation to follow.
@@ -100,12 +136,12 @@ export const initializeHealthKit = (): Promise<boolean> => {
 export const fetchWorkouts = (options: HealthInputOptions): Promise<HealthValue[]> => {
   return new Promise(async (resolve, reject) => {
     try {
-      await ensureConfigured();
+      ensureNativeModuleAvailable();
       const { startDate, endDate } = toDateRange(options);
-      const results = await healthKit.queryHealthData(
+      const results = await healthKitModule.queryHealthData(
         HealthKitDataType.WORKOUT,
-        startDate,
-        endDate
+        startDate.toISOString(),
+        endDate.toISOString()
       );
       resolve(results.map((sample: any, index: number) => normalizeWorkoutSample(sample, index)));
     } catch (error) {
@@ -123,12 +159,12 @@ export const fetchWorkouts = (options: HealthInputOptions): Promise<HealthValue[
 export const fetchRestingHeartRate = (options: HealthInputOptions): Promise<HealthValue[]> => {
   return new Promise(async (resolve, reject) => {
     try {
-      await ensureConfigured();
+      ensureNativeModuleAvailable();
       const { startDate, endDate } = toDateRange(options);
-      const results = await healthKit.queryHealthData(
+      const results = await healthKitModule.queryHealthData(
         HealthKitDataType.RESTING_HEART_RATE,
-        startDate,
-        endDate,
+        startDate.toISOString(),
+        endDate.toISOString(),
         { ascending: true }
       );
       resolve(results.map((sample: any) => normalizeSample(sample)));
@@ -146,12 +182,12 @@ export const fetchRestingHeartRate = (options: HealthInputOptions): Promise<Heal
 export const fetchHrv = (options: HealthInputOptions): Promise<HealthValue[]> => {
   return new Promise(async (resolve, reject) => {
     try {
-      await ensureConfigured();
+      ensureNativeModuleAvailable();
       const { startDate, endDate } = toDateRange(options);
-      const results = await healthKit.queryHealthData(
+      const results = await healthKitModule.queryHealthData(
         HealthKitDataType.HEART_RATE_VARIABILITY_SDNN,
-        startDate,
-        endDate,
+        startDate.toISOString(),
+        endDate.toISOString(),
         { ascending: true }
       );
       resolve(results.map((sample: any) => normalizeSample(sample)));
@@ -169,12 +205,12 @@ export const fetchHrv = (options: HealthInputOptions): Promise<HealthValue[]> =>
 export const fetchSleep = (options: HealthInputOptions): Promise<HealthValue[]> => {
   return new Promise(async (resolve, reject) => {
     try {
-      await ensureConfigured();
+      ensureNativeModuleAvailable();
       const { startDate, endDate } = toDateRange(options);
-      const results = await healthKit.queryHealthData(
+      const results = await healthKitModule.queryHealthData(
         HealthKitDataType.SLEEP_ANALYSIS,
-        startDate,
-        endDate,
+        startDate.toISOString(),
+        endDate.toISOString(),
         { ascending: true }
       );
       resolve(results.map((sample: any) => normalizeSample(sample)));
@@ -191,12 +227,12 @@ export const fetchSleep = (options: HealthInputOptions): Promise<HealthValue[]> 
 export const fetchHeartRateSamples = (options: HealthInputOptions): Promise<HealthValue[]> => {
   return new Promise(async (resolve, reject) => {
     try {
-      await ensureConfigured();
+      ensureNativeModuleAvailable();
       const { startDate, endDate } = toDateRange(options);
-      const results = await healthKit.queryHealthData(
+      const results = await healthKitModule.queryHealthData(
         HealthKitDataType.HEART_RATE,
-        startDate,
-        endDate,
+        startDate.toISOString(),
+        endDate.toISOString(),
         { ascending: true }
       );
       resolve(results.map((sample: any) => normalizeSample(sample)));

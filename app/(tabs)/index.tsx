@@ -10,6 +10,8 @@ export default function HomeScreen() {
     isLoading,
     error,
     isHealthKitAvailable,
+    healthDebug,
+    checkHealthKitStatus,
     processNewData,
   } = useRecoveryState();
 
@@ -65,14 +67,41 @@ export default function HomeScreen() {
 
     if (!isHealthKitAvailable) {
       return (
-        <ThemedView style={styles.noticeCard} lightColor="#FFF8E5" darkColor="#2A2210">
-          <ThemedText type="defaultSemiBold" style={styles.noticeTitle}>
-            Health data unavailable
-          </ThemedText>
-          <ThemedText type="default">
-            HealthKit is not available on this device. Connect Apple Health to unlock recovery.
-          </ThemedText>
-        </ThemedView>
+        <>
+          <ThemedView style={styles.noticeCard} lightColor="#FFF8E5" darkColor="#2A2210">
+            <ThemedText type="defaultSemiBold" style={styles.noticeTitle}>
+              Health data unavailable
+            </ThemedText>
+            <ThemedText type="default">
+              HealthKit is not available on this device. Connect Apple Health to unlock recovery.
+            </ThemedText>
+          </ThemedView>
+          <ThemedView style={styles.debugCard} lightColor="#FFFFFF" darkColor="#16191F">
+            <ThemedText type="defaultSemiBold" style={styles.noticeTitle}>
+              HealthKit debug
+            </ThemedText>
+            <ThemedView lightColor="transparent" darkColor="transparent" style={styles.debugRow}>
+              <ThemedText>Module available</ThemedText>
+              <ThemedText type="defaultSemiBold">
+                {healthDebug?.moduleAvailable ? 'yes' : 'no'}
+              </ThemedText>
+            </ThemedView>
+            <ThemedView lightColor="transparent" darkColor="transparent" style={styles.debugRow}>
+              <ThemedText>HealthKit available</ThemedText>
+              <ThemedText type="defaultSemiBold">
+                {healthDebug?.isAvailable === undefined
+                  ? 'unknown'
+                  : healthDebug.isAvailable
+                    ? 'yes'
+                    : 'no'}
+              </ThemedText>
+            </ThemedView>
+            {healthDebug?.error ? (
+              <ThemedText type="default">{healthDebug.error}</ThemedText>
+            ) : null}
+            <Button title="Check HealthKit" onPress={checkHealthKitStatus} />
+          </ThemedView>
+        </>
       );
     }
 
@@ -260,5 +289,14 @@ const styles = StyleSheet.create({
   },
   noticeTitle: {
     fontSize: 18,
+  },
+  debugCard: {
+    padding: 20,
+    borderRadius: 20,
+    gap: 12,
+  },
+  debugRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   }
 });
