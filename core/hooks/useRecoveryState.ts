@@ -208,15 +208,8 @@ export const useRecoveryState = () => {
             const workoutDateKey = formatDateKey(new Date(w.startDate));
             const dailyMetric = dailyMetricsByDate.get(workoutDateKey);
 
-            const shouldFetchHeartRate = index < 3;
-            const heartRateSamples = shouldFetchHeartRate
-              ? await safeFetch('Herzfrequenz-Abfrage', () =>
-                  HealthService.fetchHeartRateSamples({
-                    startDate: w.startDate,
-                    endDate: w.endDate,
-                  })
-                )
-              : [];
+            const shouldFetchHeartRate = false;
+            const heartRateSamples: any[] = [];
 
             const normalizedHeartRateSamples: HeartRateSample[] = heartRateSamples
               .map(sample => ({
