@@ -7,6 +7,14 @@ import { ScrollView, StyleSheet, Button } from 'react-native';
 
 const formatHours = (value: number) => `${value.toFixed(1)} h`;
 
+const formatDuration = (hours: number) => {
+  if (!Number.isFinite(hours)) return '—';
+  if (hours >= 48) {
+    return `${(hours / 24).toFixed(1)} Tage`;
+  }
+  return formatHours(hours);
+};
+
 export default function EpocScreen() {
   const { workoutSummaries, dailyMetrics, isLoading, error, processNewData } =
     useRecoveryState();
@@ -78,7 +86,7 @@ export default function EpocScreen() {
           <ThemedView style={styles.card} lightColor="#FFFFFF" darkColor="#16191F">
             <ThemedText type="subtitle">Letztes Training</ThemedText>
             <ThemedText style={styles.cardValue}>
-              {formatHours(derived.recoveryAdded)}
+              {formatDuration(derived.recoveryAdded)}
             </ThemedText>
             <ThemedText style={styles.cardCaption}>
               Erholung hinzugefügt (EPOC‑Schätzung)
@@ -88,10 +96,10 @@ export default function EpocScreen() {
           <ThemedView style={styles.card} lightColor="#FFFFFF" darkColor="#16191F">
             <ThemedText type="subtitle">Aktuelle Erholungszeit</ThemedText>
             <ThemedText style={styles.cardValue}>
-              {formatHours(derived.recoveryRemaining)}
+              {formatDuration(derived.recoveryRemaining)}
             </ThemedText>
             <ThemedText style={styles.cardCaption}>
-              Abgebaut seit {formatHours(derived.hoursSince ?? 0)} mit Modifier{' '}
+              Abgebaut seit {formatDuration(derived.hoursSince ?? 0)} mit Modifier{' '}
               {derived.modifier.toFixed(2)}
             </ThemedText>
           </ThemedView>
@@ -164,6 +172,7 @@ const styles = StyleSheet.create({
   },
   cardValue: {
     fontSize: 32,
+    lineHeight: 38,
     fontWeight: '700',
   },
   cardCaption: {

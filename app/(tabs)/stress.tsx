@@ -176,6 +176,7 @@ const styles = StyleSheet.create({
   },
   indexValue: {
     fontSize: 32,
+    lineHeight: 38,
     fontWeight: '700',
   },
   indexCaption: {

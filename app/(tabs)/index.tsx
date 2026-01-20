@@ -290,6 +290,7 @@ const styles = StyleSheet.create({
   },
   statusBadgeText: {
     fontSize: 32,
+    lineHeight: 36,
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -319,6 +320,7 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontSize: 28,
+    lineHeight: 34,
     fontWeight: '700',
   },
   metricCaption: {
