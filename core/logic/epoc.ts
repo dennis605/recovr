@@ -88,6 +88,45 @@ export const estimateRecoveryHoursAdded = (
   return epocTotal / (config.vo2Max * config.k);
 };
 
+export const estimateRecoveryHoursTotal = (
+  workouts: WorkoutSummary[],
+  since: Date,
+  config: EpocConfig = DEFAULT_CONFIG
+) => {
+  return workouts
+    .filter(w => new Date(w.endTime) >= since)
+    .reduce((sum, workout) => sum + estimateRecoveryHoursAdded(workout, config), 0);
+};
+
+export const estimateRecoveryRemaining = (
+  workouts: WorkoutSummary[],
+  since: Date,
+  modifier: number,
+  config: EpocConfig = DEFAULT_CONFIG
+) => {
+  const nowMs = Date.now();
+  return workouts
+    .filter(w => new Date(w.endTime) >= since)
+    .reduce((sum, workout) => {
+      const added = estimateRecoveryHoursAdded(workout, config);
+      const endMs = new Date(workout.endTime).getTime();
+      if (!Number.isFinite(endMs)) {
+        return sum;
+      }
+      const hoursSince = Math.max(0, (nowMs - endMs) / (1000 * 60 * 60));
+      return sum + Math.max(0, added - hoursSince * modifier);
+    }, 0);
+};
+
+export const getLatestWorkoutEnd = (workouts: WorkoutSummary[], since: Date) => {
+  const recent = workouts.filter(w => new Date(w.endTime) >= since);
+  if (recent.length === 0) return null;
+  return recent
+    .map(w => new Date(w.endTime))
+    .filter(date => Number.isFinite(date.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+};
+
 export const calculateRecoveryModifier = (
   dailyMetrics: DailyMetrics[],
   workoutSummaries: WorkoutSummary[]

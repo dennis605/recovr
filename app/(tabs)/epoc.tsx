@@ -1,9 +1,15 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useRecoveryState } from '@/core/hooks/useRecoveryState';
-import { calculateRecoveryModifier, estimateRecoveryHoursAdded } from '@/core/logic/epoc';
+import {
+  calculateRecoveryModifier,
+  estimateRecoveryHoursTotal,
+  estimateRecoveryRemaining,
+  getLatestWorkoutEnd,
+} from '@/core/logic/epoc';
 import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Button } from 'react-native';
+import { ScrollView, StyleSheet, Button, Pressable } from 'react-native';
+import { useState } from 'react';
 
 const formatHours = (value: number) => `${value.toFixed(1)} h`;
 
@@ -18,29 +24,30 @@ const formatDuration = (hours: number) => {
 export default function EpocScreen() {
   const { workoutSummaries, dailyMetrics, isLoading, error, processNewData } =
     useRecoveryState();
+  const [windowDays, setWindowDays] = useState(30);
 
   const derived = useMemo(() => {
-    const latestWorkout = [...workoutSummaries].sort(
-      (a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime()
-    )[0];
-
-    if (!latestWorkout) {
+    if (workoutSummaries.length === 0) {
       return {
         hasWorkout: false,
         recoveryAdded: 0,
         recoveryRemaining: 0,
         modifier: 1,
+        latestWorkoutEnd: null as Date | null,
         factors: null as null | ReturnType<typeof calculateRecoveryModifier>,
       };
     }
 
-    const recoveryAdded = estimateRecoveryHoursAdded(latestWorkout);
+    const since = new Date();
+    since.setDate(since.getDate() - windowDays);
+    const recoveryAdded = estimateRecoveryHoursTotal(workoutSummaries, since);
     const factors = calculateRecoveryModifier(dailyMetrics, workoutSummaries);
-    const hoursSince = Math.max(
-      0,
-      (Date.now() - new Date(latestWorkout.endTime).getTime()) / (1000 * 60 * 60)
+    const recoveryRemaining = estimateRecoveryRemaining(
+      workoutSummaries,
+      since,
+      factors.modifier
     );
-    const recoveryRemaining = Math.max(0, recoveryAdded - hoursSince * factors.modifier);
+    const latestWorkoutEnd = getLatestWorkoutEnd(workoutSummaries, since);
 
     return {
       hasWorkout: true,
@@ -48,10 +55,9 @@ export default function EpocScreen() {
       recoveryRemaining,
       modifier: factors.modifier,
       factors,
-      workout: latestWorkout,
-      hoursSince,
+      latestWorkoutEnd,
     };
-  }, [dailyMetrics, workoutSummaries]);
+  }, [dailyMetrics, workoutSummaries, windowDays]);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -60,6 +66,32 @@ export default function EpocScreen() {
         <ThemedText style={styles.subtitle}>
           Schätzung nach HR‑Intensität und dynamischem Abbau.
         </ThemedText>
+      </ThemedView>
+
+      <ThemedView style={styles.segmented} lightColor="#FFFFFF" darkColor="#16191F">
+        <ThemedText type="defaultSemiBold">Zeitraum</ThemedText>
+        <ThemedView style={styles.segmentRow} lightColor="transparent" darkColor="transparent">
+          {[7, 30, 90].map(days => {
+            const active = windowDays === days;
+            return (
+              <Pressable key={days} onPress={() => setWindowDays(days)}>
+                <ThemedView
+                  style={[styles.segment, active ? styles.segmentActive : null]}
+                  lightColor={active ? '#1F2933' : '#F1F3F6'}
+                  darkColor={active ? '#E6ECFF' : '#232833'}
+                >
+                  <ThemedText
+                    style={active ? styles.segmentTextActive : styles.segmentText}
+                    lightColor={active ? '#FFFFFF' : '#1F2933'}
+                    darkColor={active ? '#1A1C21' : '#E6ECFF'}
+                  >
+                    {days} Tage
+                  </ThemedText>
+                </ThemedView>
+              </Pressable>
+            );
+          })}
+        </ThemedView>
       </ThemedView>
 
       {error ? (
@@ -84,12 +116,12 @@ export default function EpocScreen() {
       ) : (
         <>
           <ThemedView style={styles.card} lightColor="#FFFFFF" darkColor="#16191F">
-            <ThemedText type="subtitle">Letztes Training</ThemedText>
+            <ThemedText type="subtitle">Letzte {windowDays} Tage</ThemedText>
             <ThemedText style={styles.cardValue}>
               {formatDuration(derived.recoveryAdded)}
             </ThemedText>
             <ThemedText style={styles.cardCaption}>
-              Erholung hinzugefügt (EPOC‑Schätzung)
+              Erholung hinzugefügt (EPOC‑Schätzung gesamt)
             </ThemedText>
           </ThemedView>
 
@@ -99,8 +131,10 @@ export default function EpocScreen() {
               {formatDuration(derived.recoveryRemaining)}
             </ThemedText>
             <ThemedText style={styles.cardCaption}>
-              Abgebaut seit {formatDuration(derived.hoursSince ?? 0)} mit Modifier{' '}
-              {derived.modifier.toFixed(2)}
+              {derived.latestWorkoutEnd
+                ? `Abgebaut seit ${derived.latestWorkoutEnd.toLocaleDateString('de-DE')} (${derived.latestWorkoutEnd.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })})`
+                : 'Kein aktuelles Training im Zeitraum gefunden'}
+              {' · '}Modifier {derived.modifier.toFixed(2)}
             </ThemedText>
           </ThemedView>
 
@@ -156,6 +190,31 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     opacity: 0.7,
+  },
+  segmented: {
+    padding: 16,
+    borderRadius: 18,
+    gap: 10,
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  segment: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+  },
+  segmentActive: {
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+  },
+  segmentText: {
+    fontSize: 13,
+  },
+  segmentTextActive: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   noticeCard: {
     padding: 20,

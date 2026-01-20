@@ -65,6 +65,36 @@ function ensureFile(filePath, content) {
   console.log(`patch-node-modules: wrote ${filePath}`);
 }
 
+function ensureIsoFormatter(filePath) {
+  if (!fs.existsSync(filePath)) {
+    console.warn(`patch-node-modules: missing ${filePath}`);
+    return;
+  }
+  const original = fs.readFileSync(filePath, 'utf8');
+  if (original.includes('private static func isoFormatter()')) {
+    return;
+  }
+  const pattern =
+    /public class ExpoHealthKitModule: Module \{\n    public static let healthStore = HKHealthStore\(\)\n    private var observers: \[String: HKObserverQuery\] = \[:\]\n/;
+  if (!pattern.test(original)) {
+    console.warn(`patch-node-modules: isoFormatter anchor not found in ${filePath}`);
+    return;
+  }
+  const updated = original.replace(
+    pattern,
+    'public class ExpoHealthKitModule: Module {\n' +
+      '    public static let healthStore = HKHealthStore()\n' +
+      '    private var observers: [String: HKObserverQuery] = [:]\n' +
+      '    private static func isoFormatter() -> ISO8601DateFormatter {\n' +
+      '        let formatter = ISO8601DateFormatter()\n' +
+      '        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]\n' +
+      '        return formatter\n' +
+      '    }\n'
+  );
+  fs.writeFileSync(filePath, updated);
+  console.log(`patch-node-modules: updated ${filePath}`);
+}
+
 applyReplacements(
   path.join(ROOT, 'node_modules', 'expo-health-kit', 'ios', 'ExpoHealthKit.podspec'),
   [
@@ -89,8 +119,18 @@ ensureFile(
   )
 );
 
+const expoHealthKitModulePath = path.join(
+  ROOT,
+  'node_modules',
+  'expo-health-kit',
+  'ios',
+  'ExpoHealthKitModule.swift'
+);
+
+ensureIsoFormatter(expoHealthKitModulePath);
+
 applyRegexReplacements(
-  path.join(ROOT, 'node_modules', 'expo-health-kit', 'ios', 'ExpoHealthKitModule.swift'),
+  expoHealthKitModulePath,
   [
     {
       pattern:
@@ -131,6 +171,14 @@ applyRegexReplacements(
     {
       pattern: /try await healthStore\.enableBackgroundDelivery/g,
       replacement: 'try await Self.healthStore.enableBackgroundDelivery',
+    },
+    {
+      pattern: /ISO8601DateFormatter\(\)\.date\(from:/g,
+      replacement: 'Self.isoFormatter().date(from:',
+    },
+    {
+      pattern: /ISO8601DateFormatter\(\)\.string\(from:/g,
+      replacement: 'Self.isoFormatter().string(from:',
     },
   ]
 );
