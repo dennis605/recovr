@@ -1,6 +1,7 @@
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { useRecoveryState } from '@/core/hooks/useRecoveryState';
+import { BASE_RECOVERY_RATE_PER_HOUR, DEBT_THRESHOLDS } from '@/core/logic/recovery';
 import { useMemo } from 'react';
 import { StyleSheet, Button, ActivityIndicator, ScrollView } from 'react-native';
 
@@ -42,6 +43,18 @@ export default function HomeScreen() {
     : 'Jederzeit bereit';
   const debtScore = Math.max(0, Math.round(lastRecoveryState.debtScore));
   const breakdown = lastRecoveryState.explanationBreakdown;
+  const modifierProduct = breakdown
+    ? (breakdown.sleepModifier ?? 1) *
+      (breakdown.hrvModifier ?? 1) *
+      (breakdown.rhrModifier ?? 1) *
+      (breakdown.learningModifier ?? 1)
+    : null;
+  const effectiveRecoveryRate = modifierProduct
+    ? BASE_RECOVERY_RATE_PER_HOUR * modifierProduct
+    : null;
+  const targetDebt = DEBT_THRESHOLDS.YELLOW;
+  const progressToTarget =
+    targetDebt > 0 ? Math.max(0, Math.min(1, 1 - debtScore / targetDebt)) : 0;
   const statusLabelMap = {
     green: 'GRÜN',
     yellow: 'GELB',
@@ -50,8 +63,13 @@ export default function HomeScreen() {
 
   const formatModifier = (value?: number) => {
     if (value === undefined) return '—';
-    const formatted = Math.round(value * 100);
-    return `${formatted > 0 ? '+' : ''}${formatted}%`;
+    const delta = Math.round((value - 1) * 100);
+    return `${delta > 0 ? '+' : ''}${delta}%`;
+  };
+
+  const formatRate = (value: number | null) => {
+    if (value === null) return '—';
+    return `${value.toFixed(1)} Punkte/h`;
   };
 
   const renderContent = () => {
@@ -135,6 +153,40 @@ export default function HomeScreen() {
           </ThemedView>
         </ThemedView>
 
+        <ThemedView style={styles.rateCard} lightColor="#FFFFFF" darkColor="#16191F">
+          <ThemedText type="subtitle">Erholungsrate</ThemedText>
+          <ThemedView style={styles.rateRow} lightColor="transparent" darkColor="transparent">
+            <ThemedText>Basisrate</ThemedText>
+            <ThemedText type="defaultSemiBold">
+              {formatRate(BASE_RECOVERY_RATE_PER_HOUR)}
+            </ThemedText>
+          </ThemedView>
+          <ThemedView style={styles.rateRow} lightColor="transparent" darkColor="transparent">
+            <ThemedText>Aktuell (mit Einfluss)</ThemedText>
+            <ThemedText type="defaultSemiBold">{formatRate(effectiveRecoveryRate)}</ThemedText>
+          </ThemedView>
+          <ThemedView style={styles.progressBlock} lightColor="transparent" darkColor="transparent">
+            <ThemedView style={styles.progressBar} lightColor="#F1F3F6" darkColor="#232833">
+              <ThemedView
+                style={[styles.progressFill, { width: `${progressToTarget * 100}%` }]}
+                lightColor="#C9D6FF"
+                darkColor="#2B5BFF"
+              />
+              <ThemedView
+                style={[styles.progressMarker, { left: `${progressToTarget * 100}%` }]}
+                lightColor="#111111"
+                darkColor="#FFFFFF"
+              />
+            </ThemedView>
+            <ThemedView style={styles.progressLabels} lightColor="transparent" darkColor="transparent">
+              <ThemedText style={styles.progressLabel}>Aktuell: {debtScore} Punkte</ThemedText>
+              <ThemedText style={styles.progressLabel}>
+                Ziel: ≤ {targetDebt} Punkte
+              </ThemedText>
+            </ThemedView>
+          </ThemedView>
+        </ThemedView>
+
         <ThemedView style={styles.metricsGrid} lightColor="transparent" darkColor="transparent">
           <ThemedView style={styles.metricCard} lightColor="#F4F6FF" darkColor="#1E2430">
             <ThemedText type="defaultSemiBold">Erholungsdefizit</ThemedText>
@@ -150,11 +202,13 @@ export default function HomeScreen() {
           </ThemedView>
         </ThemedView>
 
-        <ThemedView style={styles.breakdownCard} lightColor="#FFFFFF" darkColor="#16191F">
-          <ThemedView style={styles.breakdownHeader} lightColor="transparent" darkColor="transparent">
-            <ThemedText type="subtitle">Warum diese Erholung?</ThemedText>
-            <ThemedText style={styles.breakdownCaption}>Letzte Eingaben angewendet</ThemedText>
-          </ThemedView>
+          <ThemedView style={styles.breakdownCard} lightColor="#FFFFFF" darkColor="#16191F">
+            <ThemedView style={styles.breakdownHeader} lightColor="transparent" darkColor="transparent">
+              <ThemedText type="subtitle">Warum diese Erholung?</ThemedText>
+              <ThemedText style={styles.breakdownCaption}>
+                Einfluss auf Erholung pro Stunde
+              </ThemedText>
+            </ThemedView>
           <ThemedView style={styles.breakdownRow} lightColor="transparent" darkColor="transparent">
             <ThemedText>Letzte Trainingslast</ThemedText>
             <ThemedText type="defaultSemiBold">
@@ -275,6 +329,45 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 22,
     gap: 12,
+  },
+  rateCard: {
+    padding: 20,
+    borderRadius: 22,
+    gap: 12,
+  },
+  rateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  progressBlock: {
+    gap: 8,
+  },
+  progressBar: {
+    height: 10,
+    borderRadius: 999,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  progressMarker: {
+    position: 'absolute',
+    top: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    marginLeft: -9,
+    opacity: 0.9,
+  },
+  progressLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  progressLabel: {
+    fontSize: 12,
+    opacity: 0.7,
   },
   breakdownHeader: {
     gap: 4,

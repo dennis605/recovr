@@ -12,7 +12,7 @@ const HR_ZONE_WEIGHTS = {
   z5: 8.0,
 };
 
-const BASE_RECOVERY_RATE_PER_HOUR = 6.0; // Load points recovered per hour under ideal conditions
+export const BASE_RECOVERY_RATE_PER_HOUR = 6.0; // Load points recovered per hour under ideal conditions
 
 const MODIFIERS = {
   SLEEP: {
@@ -39,7 +39,7 @@ const MODIFIERS = {
 const LEARNING_PHASE_DAYS = 7;
 const LEARNING_PHASE_RECOVERY_MODIFIER = 1.15;
 
-const DEBT_THRESHOLDS = {
+export const DEBT_THRESHOLDS = {
   RED: 25,
   YELLOW: 10,
 };
