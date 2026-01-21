@@ -88,7 +88,8 @@ const resolveSportMultiplier = (workoutType?: string): number => {
 export const calculateZoneMinutesFromSamples = (
   samples: HeartRateSample[],
   hrMax: number,
-  zoneConfig?: ZoneConfig
+  zoneConfig?: ZoneConfig,
+  totalDurationMinutes?: number
 ): WorkoutSummary['zoneMinutes'] => {
   const zones = createEmptyZones();
   if (samples.length === 0 || hrMax <= 0) {
@@ -96,11 +97,21 @@ export const calculateZoneMinutesFromSamples = (
   }
 
   const resolvedZones = resolveZoneConfig(hrMax, zoneConfig);
+  const perSampleMinutes =
+    totalDurationMinutes && totalDurationMinutes > 0
+      ? totalDurationMinutes / samples.length
+      : undefined;
 
   samples.forEach(sample => {
     const start = new Date(sample.startDate).getTime();
     const end = new Date(sample.endDate).getTime();
-    const minutes = Math.max(0, (end - start) / (1000 * 60)) || 1;
+    const inferredMinutes =
+      perSampleMinutes ??
+      (end > start ? (end - start) / (1000 * 60) : 0);
+    if (!inferredMinutes || inferredMinutes <= 0) {
+      return;
+    }
+    const minutes = inferredMinutes;
     const bpm = sample.value;
 
     if (bpm >= resolvedZones.z5[0]) {
@@ -180,7 +191,12 @@ export const calculateWorkoutLoadFromInputs = (inputs: WorkoutLoadInputs): Worko
   }
 
   if (heartRateSamples && hrMax) {
-    const derivedZones = calculateZoneMinutesFromSamples(heartRateSamples, hrMax, zoneConfig);
+    const derivedZones = calculateZoneMinutesFromSamples(
+      heartRateSamples,
+      hrMax,
+      zoneConfig,
+      durationMinutes
+    );
     return {
       loadScore: calculateWorkoutLoad(derivedZones),
       zoneMinutes: derivedZones,

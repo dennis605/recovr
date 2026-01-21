@@ -8,8 +8,7 @@ import {
   getLatestWorkoutEnd,
 } from '@/core/logic/epoc';
 import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Button, Pressable } from 'react-native';
-import { useState } from 'react';
+import { ScrollView, StyleSheet, Button } from 'react-native';
 
 const formatHours = (value: number) => `${value.toFixed(1)} h`;
 
@@ -24,7 +23,7 @@ const formatDuration = (hours: number) => {
 export default function EpocScreen() {
   const { workoutSummaries, dailyMetrics, isLoading, error, processNewData } =
     useRecoveryState();
-  const [windowDays, setWindowDays] = useState(30);
+  const windowDays = 5;
 
   const derived = useMemo(() => {
     if (workoutSummaries.length === 0) {
@@ -66,32 +65,6 @@ export default function EpocScreen() {
         <ThemedText style={styles.subtitle}>
           Schätzung nach HR‑Intensität und dynamischem Abbau.
         </ThemedText>
-      </ThemedView>
-
-      <ThemedView style={styles.segmented} lightColor="#FFFFFF" darkColor="#16191F">
-        <ThemedText type="defaultSemiBold">Zeitraum</ThemedText>
-        <ThemedView style={styles.segmentRow} lightColor="transparent" darkColor="transparent">
-          {[7, 30, 90].map(days => {
-            const active = windowDays === days;
-            return (
-              <Pressable key={days} onPress={() => setWindowDays(days)}>
-                <ThemedView
-                  style={[styles.segment, active ? styles.segmentActive : null]}
-                  lightColor={active ? '#1F2933' : '#F1F3F6'}
-                  darkColor={active ? '#E6ECFF' : '#232833'}
-                >
-                  <ThemedText
-                    style={active ? styles.segmentTextActive : styles.segmentText}
-                    lightColor={active ? '#FFFFFF' : '#1F2933'}
-                    darkColor={active ? '#1A1C21' : '#E6ECFF'}
-                  >
-                    {days} Tage
-                  </ThemedText>
-                </ThemedView>
-              </Pressable>
-            );
-          })}
-        </ThemedView>
       </ThemedView>
 
       {error ? (
@@ -190,31 +163,6 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     opacity: 0.7,
-  },
-  segmented: {
-    padding: 16,
-    borderRadius: 18,
-    gap: 10,
-  },
-  segmentRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  segment: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-  },
-  segmentActive: {
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.12)',
-  },
-  segmentText: {
-    fontSize: 13,
-  },
-  segmentTextActive: {
-    fontSize: 13,
-    fontWeight: '700',
   },
   noticeCard: {
     padding: 20,

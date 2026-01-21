@@ -29,11 +29,40 @@ const TYPE_INTENSITY: Record<string, number> = {
   strength: 0.6,
   hiit: 0.85,
   walking: 0.55,
+  yoga: 0.5,
   default: 0.65,
+};
+
+const TYPE_SCALE: Record<string, number> = {
+  running: 1.0,
+  cycling: 0.9,
+  swimming: 0.95,
+  strength: 0.6,
+  hiit: 1.2,
+  walking: 0.35,
+  yoga: 0.25,
+  default: 0.75,
 };
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
+
+const resolveWorkoutType = (rawType?: string) => {
+  const lower = rawType?.toLowerCase() ?? 'default';
+  const cleaned = lower.replace('hkworkoutactivitytype', '').replace(/[^a-z]/g, '');
+  if (cleaned.includes('walk') || cleaned.includes('hike') || cleaned.includes('wandern')) {
+    return 'walking';
+  }
+  if (cleaned.includes('run')) return 'running';
+  if (cleaned.includes('cycle') || cleaned.includes('bike')) return 'cycling';
+  if (cleaned.includes('swim')) return 'swimming';
+  if (cleaned.includes('hiit') || cleaned.includes('interval')) return 'hiit';
+  if (cleaned.includes('strength') || cleaned.includes('weight') || cleaned.includes('gym')) {
+    return 'strength';
+  }
+  if (cleaned.includes('yoga') || cleaned.includes('pilates')) return 'yoga';
+  return cleaned || 'default';
+};
 
 const median = (values: number[]) => {
   if (values.length === 0) return 0;
@@ -60,7 +89,7 @@ export const estimateIntensityRatio = (workout: WorkoutSummary) => {
     return clamp(weighted / minutes, 0.4, 1.0);
   }
 
-  const key = workout.type?.toLowerCase() ?? 'default';
+  const key = resolveWorkoutType(workout.type);
   return TYPE_INTENSITY[key] ?? TYPE_INTENSITY.default;
 };
 
@@ -73,7 +102,9 @@ export const estimateEpocTotal = (
     return 0;
   }
   const intensityRatio = estimateIntensityRatio(workout);
-  const epocPerMinute = config.fInt * Math.exp(config.a * intensityRatio);
+  const resolvedType = resolveWorkoutType(workout.type);
+  const scale = TYPE_SCALE[resolvedType] ?? TYPE_SCALE.default;
+  const epocPerMinute = config.fInt * scale * Math.exp(config.a * intensityRatio);
   return durationMinutes * epocPerMinute;
 };
 

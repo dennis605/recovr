@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 export type HealthInputOptions = {
   startDate: string;
   endDate?: string;
+  limit?: number;
 };
 
 export type HealthValue = {
@@ -142,7 +143,7 @@ export const fetchWorkouts = (options: HealthInputOptions): Promise<HealthValue[
         HealthKitDataType.WORKOUT,
         startDate.toISOString(),
         endDate.toISOString(),
-        { ascending: true, limit: 200 }
+        { ascending: false, limit: 200 }
       );
       resolve(results.map((sample: any, index: number) => normalizeWorkoutSample(sample, index)));
     } catch (error) {
@@ -230,11 +231,12 @@ export const fetchHeartRateSamples = (options: HealthInputOptions): Promise<Heal
     try {
       ensureNativeModuleAvailable();
       const { startDate, endDate } = toDateRange(options);
+      const limit = options.limit ?? 500;
       const results = await healthKitModule.queryHealthData(
         HealthKitDataType.HEART_RATE,
         startDate.toISOString(),
         endDate.toISOString(),
-        { ascending: true }
+        { ascending: true, limit }
       );
       resolve(results.map((sample: any) => normalizeSample(sample)));
     } catch (error) {

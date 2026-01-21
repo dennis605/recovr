@@ -62,6 +62,29 @@ const aggregateDailyMetrics = (
   return Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
 };
 
+const summarizeWorkouts = (workouts: any[]) => {
+  if (workouts.length === 0) {
+    console.log('[HealthKit] workouts:summary', { count: 0 });
+    return;
+  }
+  const parsedDates = workouts
+    .map(w => new Date(w.startDate).getTime())
+    .filter(value => Number.isFinite(value));
+  const minDate = parsedDates.length ? new Date(Math.min(...parsedDates)).toISOString() : null;
+  const maxDate = parsedDates.length ? new Date(Math.max(...parsedDates)).toISOString() : null;
+  const sample = workouts.slice(0, 3).map(w => ({
+    type: w.activityName ?? w.type ?? 'Workout',
+    start: w.startDate,
+    end: w.endDate,
+  }));
+  console.log('[HealthKit] workouts:summary', {
+    count: workouts.length,
+    minDate,
+    maxDate,
+    sample,
+  });
+};
+
 // Initial empty state for the application
 const initialAppData: AppData = {
   userProfile: { id: 'localUser' },
@@ -142,9 +165,13 @@ export const useRecoveryState = () => {
         }
 
         const errors: string[] = [];
-        const safeFetch = async <T,>(label: string, fetcher: () => Promise<T>) => {
+        const safeFetch = async <T,>(
+          label: string,
+          fetcher: () => Promise<T>,
+          timeoutMs = 10000
+        ) => {
           try {
-            return await withTimeout(fetcher(), 10000, `${label} zu lange`);
+            return await withTimeout(fetcher(), timeoutMs, `${label} zu lange`);
           } catch (fetchError: any) {
             errors.push(fetchError?.message ?? label);
             return [] as unknown as T;
@@ -177,13 +204,16 @@ export const useRecoveryState = () => {
         );
         console.log('[HealthKit] fetch:hrv:done', { count: hrv.length });
 
-        // 2. Fetch workouts (last 3 days) to reduce load
-        const workoutOptions = { startDate: threeDaysAgo.toISOString() };
+        // 2. Fetch workouts (last 90 days) to support EPOC windows
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+        const workoutOptions = { startDate: ninetyDaysAgo.toISOString() };
         console.log('[HealthKit] fetch:workouts:start', workoutOptions);
         const workouts = await safeFetch('Workouts-Abfrage', () =>
           HealthService.fetchWorkouts(workoutOptions)
         );
         console.log('[HealthKit] fetch:workouts:done', { count: workouts.length });
+        summarizeWorkouts(workouts);
 
         const newDailyMetrics: DailyMetrics[] = aggregateDailyMetrics(
           rhr,
@@ -197,8 +227,10 @@ export const useRecoveryState = () => {
         // 2. Transform raw data into our data models (WorkoutSummary, DailyMetrics)
         // This is a placeholder for a more complex transformation logic.
         // For example, we'd need to get HR samples for each workout to calculate zones.
-        const workoutSlice = workouts.slice(0, 20);
+        const workoutSlice = workouts.slice(0, 50);
         console.log('[HealthKit] process:workouts', { count: workoutSlice.length });
+        const hrLookback = new Date();
+        hrLookback.setDate(hrLookback.getDate() - 5);
         const newWorkoutSummaries: WorkoutSummary[] = await Promise.all(
           workoutSlice.map(async (w, index) => {
             console.log('[HealthKit] workout:start', { index, start: w.startDate, end: w.endDate });
@@ -208,8 +240,20 @@ export const useRecoveryState = () => {
             const workoutDateKey = formatDateKey(new Date(w.startDate));
             const dailyMetric = dailyMetricsByDate.get(workoutDateKey);
 
-            const shouldFetchHeartRate = false;
-            const heartRateSamples: any[] = [];
+            const workoutEnd = new Date(w.endDate);
+            const shouldFetchHeartRate = workoutEnd >= hrLookback;
+            const heartRateSamples: any[] = shouldFetchHeartRate
+              ? await safeFetch(
+                  'Herzfrequenz-Abfrage',
+                  () =>
+                    HealthService.fetchHeartRateSamples({
+                      startDate: w.startDate,
+                      endDate: w.endDate,
+                      limit: 500,
+                    }),
+                  6000
+                )
+              : [];
 
             const normalizedHeartRateSamples: HeartRateSample[] = heartRateSamples
               .map(sample => ({
@@ -248,13 +292,28 @@ export const useRecoveryState = () => {
         );
         
         // 3. Recalculate the recovery state
-        // In a real scenario, we'd find the latest workout and apply it.
-        const latestWorkout = newWorkoutSummaries.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())[0];
-        
+        const lastUpdate = new Date(appData.lastRecoveryState.timestamp);
+        const newWorkouts = newWorkoutSummaries.filter(
+          workout => new Date(workout.endTime) > lastUpdate
+        );
+        const addedLoad = newWorkouts.reduce((sum, workout) => sum + workout.loadScore, 0);
+        const workoutForState =
+          addedLoad > 0
+            ? {
+                id: 'batch',
+                type: 'batch',
+                startTime: lastUpdate.toISOString(),
+                endTime: new Date().toISOString(),
+                durationInSeconds: 0,
+                zoneMinutes: { z1: 0, z2: 0, z3: 0, z4: 0, z5: 0 },
+                loadScore: addedLoad,
+              }
+            : undefined;
+
         const newState = calculateNewRecoveryState(
-            appData.lastRecoveryState,
-            newDailyMetrics,
-            latestWorkout
+          appData.lastRecoveryState,
+          newDailyMetrics,
+          workoutForState
         );
 
         // 4. Update the app state
