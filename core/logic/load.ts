@@ -182,11 +182,21 @@ export const calculateWorkoutLoadFromInputs = (inputs: WorkoutLoadInputs): Worko
     workoutType,
   } = inputs;
 
-  if (zoneMinutes) {
+  if (
+    avgHeartRate !== undefined &&
+    restingHeartRate !== undefined &&
+    hrMax !== undefined
+  ) {
     return {
-      loadScore: calculateWorkoutLoad(zoneMinutes),
-      zoneMinutes,
-      method: 'zones',
+      loadScore: calculateTrimpLoad(
+        durationMinutes,
+        avgHeartRate,
+        restingHeartRate,
+        hrMax,
+        sex
+      ),
+      zoneMinutes: createEmptyZones(),
+      method: 'trimp',
     };
   }
 
@@ -204,21 +214,11 @@ export const calculateWorkoutLoadFromInputs = (inputs: WorkoutLoadInputs): Worko
     };
   }
 
-  if (
-    avgHeartRate !== undefined &&
-    restingHeartRate !== undefined &&
-    hrMax !== undefined
-  ) {
+  if (zoneMinutes) {
     return {
-      loadScore: calculateTrimpLoad(
-        durationMinutes,
-        avgHeartRate,
-        restingHeartRate,
-        hrMax,
-        sex
-      ),
-      zoneMinutes: createEmptyZones(),
-      method: 'trimp',
+      loadScore: calculateWorkoutLoad(zoneMinutes),
+      zoneMinutes,
+      method: 'zones',
     };
   }
 
